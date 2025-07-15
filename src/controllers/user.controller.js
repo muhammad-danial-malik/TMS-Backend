@@ -166,9 +166,9 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 export const getSingleUser = asyncHandler(async (req, res) => {
-  const userId = req.params;
+  const { userId } = req.params;
 
-  if (req.user?.role !== "admin" || req.user?._id.toString() !== userId) {
+  if (req.user?.role !== "admin" && req.user?._id.toString() !== userId) {
     throw new ApiError(403, "You are not authorized to view this profile");
   }
 
