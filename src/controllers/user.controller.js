@@ -1,5 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import UserAccount from "../models/user.model.js";
+import User from "../models/user.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken";
@@ -9,12 +9,12 @@ const cookiesOptions = {
   secure: true,
   path: "/",
   sameSite: "None",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
-    const user = await UserAccount.findById(userId);
+    const user = await User.findById(userId);
 
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
@@ -27,37 +27,28 @@ const generateAccessAndRefreshToken = async (userId) => {
   }
 };
 
-const registerUser = asyncHandler(async (req, res) => {
+export const registerUser = asyncHandler(async (req, res) => {
   const { email, username, password } = req.body;
-
-  console.log("email", email);
-
-  // if (fullName === "" || email === "" || username === "" || password === "") {
-  //   return apiError(400, "All fields are required");
-  // }
 
   if ([email, username, password].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
 
-  const existedUser = await UserAccount.findOne({
+  const existedUser = await User.findOne({
     $or: [{ email }, { username }],
   });
 
   if (existedUser) {
-    throw new ApiError(
-      409,
-      "UserAccount already exists with this email or username"
-    );
+    throw new ApiError(409, "User already exists with this email or username");
   }
 
-  const user = await UserAccount.create({
+  const user = await User.create({
     email,
     username: username.toLowerCase(),
     password,
   });
 
-  const createdUser = await UserAccount.findById(user._id).select(
+  const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
@@ -67,24 +58,22 @@ const registerUser = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .json(
-      new ApiResponse(200, "UserAccount registered successfully", createdUser)
-    );
+    .json(new ApiResponse(200, "User registered successfully", createdUser));
 });
 
-const loginUser = asyncHandler(async (req, res) => {
+export const loginUser = asyncHandler(async (req, res) => {
   const { email, username, password } = req.body;
 
   if (!(username || email)) {
     throw new ApiError(400, "Username or email is required");
   }
 
-  const user = await UserAccount.findOne({
+  const user = await User.findOne({
     $or: [{ email }, { username }],
   });
 
   if (!user) {
-    throw new ApiError(404, "UserAccount does not exist");
+    throw new ApiError(404, "User does not exist");
   }
 
   const isPasswordValid = await user.isPasswordCorrect(password);
@@ -97,7 +86,7 @@ const loginUser = asyncHandler(async (req, res) => {
     user._id
   );
 
-  const loggedInUser = await UserAccount.findById(user._id).select(
+  const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
@@ -106,7 +95,7 @@ const loginUser = asyncHandler(async (req, res) => {
     .cookie("refreshToken", refreshToken, cookiesOptions)
     .cookie("accessToken", accessToken, cookiesOptions)
     .json(
-      new ApiResponse(200, "UserAccount logged in successfully", {
+      new ApiResponse(200, "User logged in successfully", {
         user: loggedInUser,
         accessToken,
         refreshToken,
@@ -114,8 +103,8 @@ const loginUser = asyncHandler(async (req, res) => {
     );
 });
 
-const logoutUser = asyncHandler(async (req, res) => {
-  await UserAccount.findByIdAndUpdate(
+export const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
     req.user._Id,
     {
       $set: {
@@ -131,10 +120,10 @@ const logoutUser = asyncHandler(async (req, res) => {
     .status(200)
     .clearCookie("refreshToken", cookiesOptions)
     .clearCookie("accessToken", cookiesOptions)
-    .json(new ApiResponse(200, "UserAccount logged out successfully", {}));
+    .json(new ApiResponse(200, "User logged out successfully", {}));
 });
 
-const refreshAccessToken = asyncHandler(async (req, res) => {
+export const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken =
     req.cookies?.refreshToken || req.body?.refreshToken;
 
@@ -148,7 +137,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET
     );
 
-    const user = await UserAccount.findById(decodedToken?._id);
+    const user = await User.findById(decodedToken?._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
@@ -176,4 +165,72 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+export const getSingleUser = asyncHandler(async (req, res) => {
+  const userId = req.params;
+
+  if (req.user?.role !== "admin" || req.user?._id.toString() !== userId) {
+    throw new ApiError(403, "You are not authorized to view this profile");
+  }
+
+  const user = await User.findById(userId).select("-password -refreshToken");
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User profile fetched successfully", user));
+});
+
+export const getAllUsers = asyncHandler(async (req, res) => {
+  const users = await User.find().select("_id username email role");
+
+  const message =
+    users.length > 0 ? "Users fetched successfully" : "no users found";
+
+  res.status(200).json(new ApiResponse(200, message, users));
+});
+
+export const updateUserRole = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { newRole } = req.body;
+
+  const allowedRoles = ["manager", "user"];
+
+  if (!allowedRoles.includes(newRole)) {
+    throw new ApiError(400, "Invalid role specified");
+  }
+
+  if (req.user._id.equals(userId)) {
+    throw new ApiError(403, "You cannot modify your own role");
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { role: newRole },
+    { new: true, runValidators: true }
+  );
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User role updated successfully", user));
+});
+
+export const deleteUser = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+
+  const user = await User.findByIdAndDelete(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User deleted successfully", user));
+});
