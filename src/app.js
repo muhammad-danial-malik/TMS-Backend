@@ -34,6 +34,11 @@ import userRouter from "./routes/user.routes.js";
 
 // routes Decelaration
 app.use("/api/v1/users", userRouter);
+
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Hello from serverless!" });
+});
+
 app.use(errorHandler);
 
 export default app;
