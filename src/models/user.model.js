@@ -6,23 +6,25 @@ const userAccountSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      require: true,
+      required: true,
       unique: true,
       trim: true,
       index: true,
     },
     email: {
       type: String,
-      require: true,
+      required: true,
       unique: true,
       trim: true,
     },
     password: {
       type: String,
-      require: [true, "Password is required"],
+      required: [true, "Password is required"],
     },
     role: {
       type: String,
+      enum: ["user", "admin"],
+      default: "user",
     },
     refreshToken: {
       type: String,
@@ -48,7 +50,6 @@ userAccountSchema.methods.generateAccessToken = function () {
       _id: this._id,
       email: this.email,
       username: this.username,
-      fullname: this.fullname,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
