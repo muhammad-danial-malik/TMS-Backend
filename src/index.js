@@ -26,16 +26,40 @@ if (!isVercel) {
     });
 }
 
-// For serverless environment - connect to DB on each request
-app.use(async (req, res, next) => {
-  try {
-    if (!mongoose.connection.readyState) {
-      await connectDB();
-    }
-    next();
-  } catch (error) {
-    next(error);
+// For serverless environment - ensure DB connection
+let isConnected = false;
+
+const ensureDbConnection = async () => {
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return;
   }
-});
+
+  try {
+    if (mongoose.connection.readyState === 0) {
+      await connectDB();
+      isConnected = true;
+    }
+  } catch (error) {
+    console.error("Database connection failed:", error);
+    isConnected = false;
+    throw error;
+  }
+};
+
+// Middleware to ensure database connection for serverless
+if (isVercel) {
+  app.use(async (req, res, next) => {
+    try {
+      await ensureDbConnection();
+      next();
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Database connection failed",
+        error: error.message,
+      });
+    }
+  });
+}
 
 export default app;
