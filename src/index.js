@@ -26,33 +26,27 @@ if (!isVercel) {
     });
 }
 
-// For serverless environment - ensure DB connection
-let isConnected = false;
-
-const ensureDbConnection = async () => {
-  if (isConnected && mongoose.connection.readyState === 1) {
-    return;
-  }
-
-  try {
-    if (mongoose.connection.readyState === 0) {
-      await connectDB();
-      isConnected = true;
-    }
-  } catch (error) {
-    console.error("Database connection failed:", error);
-    isConnected = false;
-    throw error;
-  }
-};
-
-// Middleware to ensure database connection for serverless
+// For serverless environment - simple connection approach
 if (isVercel) {
+  // Connect to MongoDB once at the start
+  connectDB()
+    .then(() => {
+      console.log("MongoDB connected for serverless environment");
+    })
+    .catch((error) => {
+      console.error("Initial MongoDB connection failed:", error.message);
+    });
+
+  // Simple middleware to check connection for each request
   app.use(async (req, res, next) => {
     try {
-      await ensureDbConnection();
+      // If connection was dropped, reconnect
+      if (mongoose.connection.readyState !== 1) {
+        await connectDB();
+      }
       next();
     } catch (error) {
+      console.error("Request-time DB connection error:", error.message);
       res.status(500).json({
         success: false,
         message: "Database connection failed",

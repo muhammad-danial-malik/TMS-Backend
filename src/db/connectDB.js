@@ -3,19 +3,14 @@ import { DB_NAME } from "../constants.js";
 
 const connectDB = async () => {
   try {
-    // Set mongoose options for serverless
-    mongoose.set("bufferCommands", false);
-    mongoose.set("bufferMaxEntries", 0);
-
+    // Simple connection without problematic options
     const connectionString = await mongoose.connect(
       `${process.env.MONGO_URI}/${DB_NAME}`,
       {
-        // Valid MongoDB connection options
-        serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-        socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-        maxPoolSize: 1, // Maintain up to 1 socket connection
-        maxIdleTimeMS: 30000, // Close connections after 30s of inactivity
-        connectTimeoutMS: 10000, // Give up initial connection after 10s
+        // Minimal options that are compatible across all Mongoose versions
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        connectTimeoutMS: 10000,
       }
     );
     console.log(
