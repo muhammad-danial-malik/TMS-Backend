@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 import connectDB from "./db/connectDB.js";
 import app from "./app.js";
 
@@ -6,27 +7,27 @@ dotenv.config({
   path: "./.env",
 });
 
-const isVercel = process.env.VERCEL === '1';
+const isVercel = process.env.VERCEL === "1";
 
 if (!isVercel) {
-
-connectDB()
-  .then(() => {
-    app.on("error", (err) => {
-      console.log("Error starting server:", err);
+  connectDB()
+    .then(() => {
+      app.on("error", (err) => {
+        console.log("Error starting server:", err);
+        process.exit(1);
+      });
+      app.listen(process.env.PORT || 3000, () => {
+        console.log(`Server is running on port ${process.env.PORT || 3000}`);
+      });
+    })
+    .catch((err) => {
+      console.log("Error connecting to database:", err);
       process.exit(1);
     });
-    app.listen(process.env.PORT || 3000, () => {
-      console.log(`Server is running on port ${process.env.PORT || 3000}`);
-    });
-  })
-  .catch((err) => {
-    console.log("Error connecting to database:", err);
-    process.exit(1);
-  });
 }
 
-  app.use(async (req, res, next) => {
+// For serverless environment - connect to DB on each request
+app.use(async (req, res, next) => {
   try {
     if (!mongoose.connection.readyState) {
       await connectDB();
@@ -36,3 +37,5 @@ connectDB()
     next(error);
   }
 });
+
+export default app;
